@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">On-device intelligence</string>
     <string name="settings_title">On-device intelligence</string>
+    <string name="settings_summary">Local AI model, downloads and permissions</string>
 
     <string name="permlab_use_intelligence">use on-device AI</string>
     <string name="permdesc_use_intelligence">Allows this app to send text and images to the
