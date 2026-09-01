@@ -1,0 +1,6 @@
+# Never commit pulled APKs or anything decompiled from them. The interop notes in docs/ record
+# interface facts, which is the whole point; the binaries they came from are not ours to ship.
+*.apk
+*.dex
+*.jar
+prebuilts/litertlm/**/*.so
