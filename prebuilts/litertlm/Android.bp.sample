@@ -1,0 +1,14 @@
+// Rename to Android.bp once libopenaicore_litertlm.so is present for every ABI listed below.
+// See ../../native/litertlm/README.md for how to build it.
+
+cc_prebuilt_library_shared {
+    name: "libopenaicore_litertlm",
+    srcs: ["arm64/libopenaicore_litertlm.so"],
+    strip: {
+        // The adapter is a build output from another toolchain; stripping it again gains nothing
+        // and loses the symbols needed to read a native crash out of the sandbox.
+        none: true,
+    },
+    product_specific: true,
+    compile_multilib: "64",
+}

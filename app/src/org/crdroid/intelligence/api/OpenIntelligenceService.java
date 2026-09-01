@@ -25,6 +25,7 @@ import android.app.ondeviceintelligence.OnDeviceIntelligenceManager;
 import android.app.ondeviceintelligence.ProcessingCallback;
 import android.app.ondeviceintelligence.StreamingProcessingCallback;
 import android.content.Intent;
+import android.os.Binder;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.IBinder;
@@ -33,6 +34,7 @@ import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.LongSparseArray;
 
+import org.crdroid.intelligence.broker.ConsentStore;
 import org.crdroid.intelligence.client.IOpenIntelligence;
 import org.crdroid.intelligence.client.IOpenIntelligenceCallback;
 import org.crdroid.intelligence.common.Errors;
@@ -58,6 +60,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class OpenIntelligenceService extends Service {
 
     private OnDeviceIntelligenceManager mManager;
+    private ConsentStore mConsent;
     private Executor mExecutor;
 
     private final AtomicLong mNextToken = new AtomicLong(1);
@@ -67,6 +70,7 @@ public final class OpenIntelligenceService extends Service {
     public void onCreate() {
         super.onCreate();
         mManager = getSystemService(OnDeviceIntelligenceManager.class);
+        mConsent = new ConsentStore(this);
         mExecutor = Executors.newCachedThreadPool();
     }
 
@@ -79,7 +83,7 @@ public final class OpenIntelligenceService extends Service {
 
         @Override
         public int[] listFeatures() {
-            if (mManager == null) {
+            if (mManager == null || callerDenial() != null) {
                 return new int[0];
             }
             final Object lock = new Object();
@@ -111,6 +115,9 @@ public final class OpenIntelligenceService extends Service {
 
         @Override
         public int getFeatureStatus(int featureId) {
+            if (callerDenial() != null) {
+                return FeatureDetails.FEATURE_STATUS_UNAVAILABLE;
+            }
             Feature feature = fetchFeature(featureId);
             if (feature == null || mManager == null) {
                 return FeatureDetails.FEATURE_STATUS_UNAVAILABLE;
@@ -152,6 +159,11 @@ public final class OpenIntelligenceService extends Service {
 
         @Override
         public void requestDownload(int featureId, IOpenIntelligenceCallback callback) {
+            String denial = callerDenial();
+            if (denial != null) {
+                safeError(callback, denial, null);
+                return;
+            }
             Feature feature = fetchFeature(featureId);
             if (feature == null || mManager == null) {
                 safeError(callback, Errors.FEATURE_UNAVAILABLE, "id " + featureId);
@@ -190,6 +202,11 @@ public final class OpenIntelligenceService extends Service {
         @Override
         public long process(int featureId, Bundle request, boolean streaming,
                 IOpenIntelligenceCallback callback) {
+            String denial = callerDenial();
+            if (denial != null) {
+                safeError(callback, denial, null);
+                return 0;
+            }
             Feature feature = fetchFeature(featureId);
             if (feature == null || mManager == null) {
                 safeError(callback, Errors.FEATURE_UNAVAILABLE, "id " + featureId);
@@ -262,6 +279,30 @@ public final class OpenIntelligenceService extends Service {
             }
         }
     };
+
+    /**
+     * Per-package consent for third-party callers.
+     *
+     * <p>This is the one place a package name is available for an inference request: the platform
+     * hands the sandbox a uid and nothing more, and an isolated process cannot reach the package
+     * manager to resolve one. Anything reaching OpenAICore through this service is therefore
+     * checked here, by name, against the user's per-app switch.
+     */
+    private String callerDenial() {
+        if (!mConsent.isGloballyEnabled()) {
+            return Errors.NOT_CONSENTED;
+        }
+        String[] packages = getPackageManager().getPackagesForUid(Binder.getCallingUid());
+        if (packages == null) {
+            return Errors.NOT_CONSENTED;
+        }
+        for (String pkg : packages) {
+            if (mConsent.isPackageAllowed(pkg)) {
+                return null;
+            }
+        }
+        return Errors.NOT_CONSENTED;
+    }
 
     private void retire(long token) {
         synchronized (mInFlight) {

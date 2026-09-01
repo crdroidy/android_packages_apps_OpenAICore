@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.crdroid.intelligence.broker;
+package org.crdroid.intelligence.inference;
 
 import android.os.SystemClock;
 import android.util.SparseArray;

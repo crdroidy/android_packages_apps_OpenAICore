@@ -86,6 +86,7 @@ public final class InferenceService extends OnDeviceSandboxedInferenceService {
     private boolean mSpeculative;
     private int mThermalStatus = PowerManager.THERMAL_STATUS_NONE;
 
+    private final QuotaTracker mQuota = new QuotaTracker();
     private final AtomicInteger mInFlight = new AtomicInteger();
     private final AtomicLong mCompleted = new AtomicLong();
     private final AtomicLong mFailed = new AtomicLong();
@@ -202,6 +203,14 @@ public final class InferenceService extends OnDeviceSandboxedInferenceService {
             callback.onError(Errors.of(thermalRejection));
             return;
         }
+        // Quota is enforced here rather than in the broker because this is the component the
+        // platform actually hands callerUid to: processRequest goes from the manager service
+        // straight to the sandbox and never passes through the broker.
+        String quotaRejection = mQuota.admit(callerUid);
+        if (quotaRejection != null) {
+            callback.onError(Errors.of(quotaRejection));
+            return;
+        }
 
         // A cancellation that arrives before the worker picks the request up has to be honoured
         // without ever loading the engine, which is the common case for a user backing out of a
@@ -250,6 +259,7 @@ public final class InferenceService extends OnDeviceSandboxedInferenceService {
                         activeSession[0] = null;
                     }
                 }
+                mQuota.recordCompute(callerUid, SystemClock.uptimeMillis() - queuedAtUptimeMs);
                 mEngineHolder.endRequest();
                 mInFlight.decrementAndGet();
                 callback.onInferenceInfo(new InferenceInfo.Builder(Process.myUid())
@@ -387,13 +397,11 @@ public final class InferenceService extends OnDeviceSandboxedInferenceService {
 
     private String checkThermal() {
         synchronized (mStateLock) {
-            if (mThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
-                return Errors.THERMAL_THROTTLED;
-            }
-            if (mThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
-                return Errors.THERMAL_THROTTLED;
-            }
-            return null;
+            // Refuse new work from MODERATE upwards. In-flight generation is aborted by the
+            // broker dropping a SEVERE state push, which cancels through the same path a client
+            // cancellation uses.
+            return mThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
+                    ? Errors.THERMAL_THROTTLED : null;
         }
     }
 
@@ -422,5 +430,6 @@ public final class InferenceService extends OnDeviceSandboxedInferenceService {
                 + " completed=" + mCompleted.get()
                 + " failed=" + mFailed.get());
         mEngineHolder.dump(pw);
+        mQuota.dump(pw);
     }
 }

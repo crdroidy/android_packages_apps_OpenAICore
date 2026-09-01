@@ -53,10 +53,24 @@ import java.util.function.LongConsumer;
 /**
  * The privileged half of OpenAICore, and the only part that decides anything.
  *
- * <p>It owns the feature registry, consent, quota, tiering and the model files, and it is the sole
- * source of file descriptors for the sandbox — which has no way to open a file for itself. It also
- * observes device state the sandbox cannot see and pushes it down. What it does not do is touch
- * request or response content: that never enters this process.
+ * <p>It owns the feature registry, consent and tiering, and it is the sole source of file
+ * descriptors for the sandbox — which has no way to open a file for itself. It also observes
+ * device state the sandbox cannot see and pushes it down. What it does not do is touch request or
+ * response content: that never enters this process.
+ *
+ * <p>Note what the broker does <em>not</em> sit in front of. The platform routes
+ * {@code processRequest} from the manager service straight to the sandbox; it never passes
+ * through here. So per-caller admission cannot live in this class:
+ *
+ * <ul>
+ *   <li>Per-uid quota lives in the sandbox, which is the component that receives {@code callerUid}
+ *       on every request.
+ *   <li>Per-package consent is enforced where a package name is actually available — on the
+ *       feature-listing calls below, and in {@code OpenIntelligenceService} for third parties.
+ *   <li>The global kill switch is enforced by refusing to hand over the model descriptor, which
+ *       is the one thing every request needs and the one thing only this process can supply.
+ *       A caller replaying a stale {@link Feature} therefore still fails.
+ * </ul>
  */
 public final class IntelligenceBrokerService extends OnDeviceIntelligenceService {
 
@@ -71,7 +85,6 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
     private ModelClient mModels;
     private ConsentStore mConsent;
     private FeatureRegistry mRegistry;
-    private QuotaTracker mQuota;
     private ResourceGovernor mGovernor;
     private TierStore mTierStore;
 
@@ -87,7 +100,6 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
         mModels = new ModelClient(this);
         mConsent = new ConsentStore(this);
         mRegistry = new FeatureRegistry(mModels, mConsent);
-        mQuota = new QuotaTracker();
         mTierStore = new TierStore(this);
         mGovernor = new ResourceGovernor(this, this::onThermalChanged);
         mGovernor.start();
@@ -125,7 +137,7 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
     public void onListFeatures(int callerUid,
             OutcomeReceiver<List<Feature>, OnDeviceIntelligenceException> callback) {
         mHandler.post(() -> {
-            String denial = admit(callerUid, /* charge= */ false);
+            String denial = admit(callerUid);
             if (denial != null) {
                 callback.onError(Errors.of(denial));
                 return;
@@ -146,7 +158,7 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
     public void onGetFeature(int callerUid, int featureId,
             OutcomeReceiver<Feature, OnDeviceIntelligenceException> callback) {
         mHandler.post(() -> {
-            String denial = admit(callerUid, /* charge= */ false);
+            String denial = admit(callerUid);
             if (denial != null) {
                 callback.onError(Errors.of(denial));
                 return;
@@ -187,6 +199,13 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
             Consumer<Map<String, ParcelFileDescriptor>> fileDescriptorMapConsumer) {
         mHandler.post(() -> {
             Map<String, ParcelFileDescriptor> map = new HashMap<>();
+            if (!mConsent.isGloballyEnabled()) {
+                // The enforcement point for the master switch. The platform sends inference
+                // requests straight to the sandbox, so refusing the descriptor is what actually
+                // stops a caller holding a Feature from before the user turned this off.
+                fileDescriptorMapConsumer.accept(map);
+                return;
+            }
             String modelId = mRegistry.activeModelId();
             ParcelFileDescriptor model = mModels.openModel(modelId);
             if (model != null) {
@@ -349,8 +368,8 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
         }
     }
 
-    /** Consent, quota and resource admission, in that order. */
-    private String admit(int callerUid, boolean charge) {
+    /** Consent and resource admission for the calls that do reach this process. */
+    private String admit(int callerUid) {
         if (!mConsent.isGloballyEnabled()) {
             return Errors.NOT_CONSENTED;
         }
@@ -367,13 +386,6 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
                 return Errors.NOT_CONSENTED;
             }
         }
-        if (charge) {
-            String quotaDenial = mQuota.admit(callerUid);
-            if (quotaDenial != null) {
-                return quotaDenial;
-            }
-            return mGovernor.admit();
-        }
         return null;
     }
 
@@ -386,7 +398,6 @@ public final class IntelligenceBrokerService extends OnDeviceIntelligenceService
         mRegistry.dump(pw);
         mTierStore.dump(pw);
         mGovernor.dump(pw);
-        mQuota.dump(pw);
         mModels.dump(pw);
     }
 }

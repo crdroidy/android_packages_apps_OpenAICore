@@ -17,29 +17,24 @@
 package org.crdroid.intelligence.settings;
 
 import android.app.Activity;
-import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 
-/** Host for {@link IntelligenceSettingsFragment}, reachable from Settings > System. */
+/** Settings &gt; System &gt; On-device intelligence. */
 public final class IntelligenceSettingsActivity extends Activity {
+
+    private IntelligenceSettingsPanel mPanel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (savedInstanceState == null) {
-            getFragmentManager().beginTransaction()
-                    .replace(android.R.id.content, new IntelligenceSettingsFragment())
-                    .commit();
-        }
+        mPanel = new IntelligenceSettingsPanel(this);
     }
 
-    /** Opens the model licence in the browser. Called from the consent flow. */
-    void openLicence(String url) {
-        if (url == null || url.isEmpty()) {
-            return;
-        }
-        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Download state changes underneath this screen, so re-read it rather than trusting what
+        // was rendered when the activity was created.
+        mPanel.refresh();
     }
 }

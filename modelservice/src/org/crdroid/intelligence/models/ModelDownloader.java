@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -102,7 +102,7 @@ final class ModelDownloader {
         progress.onStarted(entry.sizeBytes);
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL(entry.url).openConnection();
+            connection = (HttpURLConnection) URI.create(entry.url).toURL().openConnection();
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
             connection.setInstanceFollowRedirects(true);

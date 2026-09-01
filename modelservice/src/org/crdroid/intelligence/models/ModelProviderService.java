@@ -90,14 +90,7 @@ public final class ModelProviderService extends Service {
 
         @Override
         public List<ModelInfo> listModels() {
-            List<ModelInfo> out = new ArrayList<>();
-            for (ModelCatalog.Entry entry : mCatalog.all()) {
-                ModelInfo info = infoFor(entry.id);
-                if (info != null) {
-                    out.add(info);
-                }
-            }
-            return out;
+            return allModelInfos();
         }
 
         @Override
@@ -196,6 +189,17 @@ public final class ModelProviderService extends Service {
         }
     };
 
+    private List<ModelInfo> allModelInfos() {
+        List<ModelInfo> out = new ArrayList<>();
+        for (ModelCatalog.Entry entry : mCatalog.all()) {
+            ModelInfo info = infoFor(entry.id);
+            if (info != null) {
+                out.add(info);
+            }
+        }
+        return out;
+    }
+
     private ModelInfo infoFor(String modelId) {
         ModelCatalog.Entry entry = mCatalog.latest(modelId);
         if (entry == null) {
@@ -242,7 +246,7 @@ public final class ModelProviderService extends Service {
     protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("OpenAICore model provider");
         pw.println("  usableSpaceMb=" + (mStore.usableSpaceBytes() >> 20));
-        for (ModelInfo info : mBinder.listModels()) {
+        for (ModelInfo info : allModelInfos()) {
             pw.printf("  %s state=%d bytes=%d/%d licenceAccepted=%b%n",
                     info.id, info.state, info.bytesDownloaded, info.sizeBytes,
                     info.licenceAccepted);

@@ -62,7 +62,10 @@ public final class Features {
         public final int type;
         public final int modalities;
         public final int maxInputTokens;
-        /** Lowest {@link DeviceTier} ordinal on which this feature is offered. */
+        /**
+         * The weakest {@link DeviceTier} that still offers this feature. Tier ordinals increase
+         * as the device gets weaker, so this is the highest ordinal, not the lowest.
+         */
         public final int minTier;
 
         Spec(int id, String name, int type, int modalities, int maxInputTokens, int minTier) {
@@ -129,7 +132,7 @@ public final class Features {
         List<Spec> out = new ArrayList<>();
         for (Spec s : SPECS) {
             if (tier > s.minTier) {
-                // Tier ordinals increase as the device gets weaker.
+                // Weaker than the weakest tier this feature is offered on.
                 continue;
             }
             if ((s.modalities & availableModalities) != s.modalities) {

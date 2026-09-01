@@ -49,10 +49,9 @@ final class ResourceGovernor {
 
     private volatile int mThermalStatus = PowerManager.THERMAL_STATUS_NONE;
 
-    private final PowerManager.OnThermalStatusChangedListener mThermalListener = status -> {
-        mThermalStatus = status;
-        mThermalSink.accept(status);
-    };
+    // Built in the constructor rather than as a field initializer: field initializers run before
+    // the constructor body, so a lambda here would capture mThermalSink before it is assigned.
+    private final PowerManager.OnThermalStatusChangedListener mThermalListener;
 
     private final BroadcastReceiver mBatteryReceiver = new BroadcastReceiver() {
         @Override
@@ -67,6 +66,10 @@ final class ResourceGovernor {
         mThermalSink = thermalSink;
         mPowerManager = context.getSystemService(PowerManager.class);
         mActivityManager = context.getSystemService(ActivityManager.class);
+        mThermalListener = status -> {
+            mThermalStatus = status;
+            thermalSink.accept(status);
+        };
     }
 
     void start() {

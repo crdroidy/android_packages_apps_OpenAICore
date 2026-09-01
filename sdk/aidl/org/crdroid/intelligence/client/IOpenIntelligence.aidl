@@ -16,6 +16,7 @@
 
 package org.crdroid.intelligence.client;
 
+import android.os.Bundle;
 import org.crdroid.intelligence.client.IOpenIntelligenceCallback;
 
 /**

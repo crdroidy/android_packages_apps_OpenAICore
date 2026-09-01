@@ -94,36 +94,17 @@ cc_library_shared {
 }
 
 // -----------------------------------------------------------------------------
-// The engine adapter, built out of tree.
+// The engine adapter is built out of tree and is NOT declared here.
 //
-// LiteRT-LM builds with Bazel and does not integrate with Soong, so it is not built here. See
-// native/litertlm/README.md: build the adapter against a pinned LiteRT-LM tag, drop the result in
-// prebuilts/litertlm/<arch>/, and this module imports it. When the prebuilt is absent the build
-// still works and OpenAICore reports the feature unavailable.
+// LiteRT-LM builds with Bazel and does not integrate with Soong. Build the adapter against a
+// pinned LiteRT-LM tag as described in native/litertlm/README.md, drop the result into
+// prebuilts/litertlm/<abi>/, and add prebuilts/litertlm/Android.bp (see Android.bp.sample there)
+// to install it. Declaring the prebuilt unconditionally here would break every build that does
+// not carry the binary.
+//
+// The JNI layer dlopens libopenaicore_litertlm.so by soname, so a build without it still boots;
+// EngineHolder falls back to the model-free engine and every feature reports unavailable.
 // -----------------------------------------------------------------------------
-soong_config_module_type {
-    name: "openaicore_engine_prebuilt",
-    module_type: "cc_prebuilt_library_shared",
-    config_namespace: "crdroid",
-    bool_variables: ["openaicore_litertlm_prebuilt"],
-    properties: ["enabled"],
-}
-
-openaicore_engine_prebuilt {
-    name: "libopenaicore_litertlm",
-    enabled: false,
-    soong_config_variables: {
-        openaicore_litertlm_prebuilt: {
-            enabled: true,
-        },
-    },
-    srcs: ["prebuilts/litertlm/arm64/libopenaicore_litertlm.so"],
-    strip: {
-        none: true,
-    },
-    product_specific: true,
-    compile_multilib: "64",
-}
 
 // -----------------------------------------------------------------------------
 // APK 1: broker, inference sandbox, probe, third-party API, settings.
@@ -145,7 +126,7 @@ android_app {
     certificate: "platform",
     privileged: true,
     product_specific: true,
-    platform_apis: true,
+    sdk_version: "system_current",
     required: [
         "privapp-permissions-org.crdroid.intelligence.xml",
         "org.crdroid.intelligence.xml",
@@ -167,7 +148,7 @@ android_app {
     certificate: "platform",
     privileged: true,
     product_specific: true,
-    platform_apis: true,
+    sdk_version: "system_current",
     optimize: {
         proguard_flags_files: ["proguard.flags"],
     },

@@ -16,15 +16,14 @@
 
 package org.crdroid.intelligence.settings;
 
+import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Fragment;
-import android.os.Bundle;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.format.Formatter;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ProgressBar;
@@ -44,12 +43,16 @@ import java.util.concurrent.Executors;
  * <p>Everything here is a real control, not a description: the master switch actually stops the
  * broker answering, and "delete model" actually frees the several gigabytes on disk. A user who
  * turns this off should be able to verify with {@code df} that it is off.
+ *
+ * <p>A plain view controller rather than a Fragment. There is one screen and no back stack, so a
+ * fragment buys nothing and {@code android.app.Fragment} is deprecated.
  */
-public final class IntelligenceSettingsFragment extends Fragment {
+final class IntelligenceSettingsPanel {
 
     private final Handler mMain = new Handler(Looper.getMainLooper());
-    private ConsentStore mConsent;
-    private SettingsModelClient mModels;
+    private final Activity mActivity;
+    private final ConsentStore mConsent;
+    private final SettingsModelClient mModels;
 
     private Switch mMasterSwitch;
     private TextView mStatus;
@@ -58,31 +61,23 @@ public final class IntelligenceSettingsFragment extends Fragment {
     private Button mDownloadButton;
     private Button mDeleteButton;
 
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle state) {
-        View root = inflater.inflate(R.layout.intelligence_settings, container, false);
-        mConsent = new ConsentStore(getActivity());
-        mModels = new SettingsModelClient(getActivity(),
-                Executors.newSingleThreadExecutor(), mMain);
+    IntelligenceSettingsPanel(Activity activity) {
+        mActivity = activity;
+        mConsent = new ConsentStore(activity);
+        mModels = new SettingsModelClient(activity, Executors.newSingleThreadExecutor(), mMain);
 
-        mMasterSwitch = root.findViewById(R.id.master_switch);
-        mStatus = root.findViewById(R.id.status);
-        mCapability = root.findViewById(R.id.capability);
-        mProgress = root.findViewById(R.id.download_progress);
-        mDownloadButton = root.findViewById(R.id.download_button);
-        mDeleteButton = root.findViewById(R.id.delete_button);
+        activity.setContentView(R.layout.intelligence_settings);
+        mMasterSwitch = activity.findViewById(R.id.master_switch);
+        mStatus = activity.findViewById(R.id.status);
+        mCapability = activity.findViewById(R.id.capability);
+        mProgress = activity.findViewById(R.id.download_progress);
+        mDownloadButton = activity.findViewById(R.id.download_button);
+        mDeleteButton = activity.findViewById(R.id.delete_button);
 
         mMasterSwitch.setChecked(mConsent.isGloballyEnabled());
         mMasterSwitch.setOnCheckedChangeListener(this::onMasterToggled);
         mDownloadButton.setOnClickListener(v -> onDownloadClicked());
         mDeleteButton.setOnClickListener(v -> onDeleteClicked());
-        return root;
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        refresh();
     }
 
     private void onMasterToggled(CompoundButton button, boolean checked) {
@@ -93,7 +88,7 @@ public final class IntelligenceSettingsFragment extends Fragment {
         }
         // Turning it on is the disclosure point. Nothing has been downloaded or run before here,
         // which is what "ships off by default" has to mean to be worth anything.
-        new AlertDialog.Builder(getActivity())
+        new AlertDialog.Builder(mActivity)
                 .setTitle(R.string.consent_title)
                 .setMessage(R.string.consent_body)
                 .setPositiveButton(R.string.consent_accept, (d, w) -> {
@@ -116,17 +111,12 @@ public final class IntelligenceSettingsFragment extends Fragment {
                 startDownload(info);
                 return;
             }
-            new AlertDialog.Builder(getActivity())
-                    .setTitle(getString(R.string.licence_title, info.licenceName))
-                    .setMessage(getString(R.string.licence_body, info.displayName,
+            new AlertDialog.Builder(mActivity)
+                    .setTitle(mActivity.getString(R.string.licence_title, info.licenceName))
+                    .setMessage(mActivity.getString(R.string.licence_body, info.displayName,
                             info.licenceName,
-                            Formatter.formatShortFileSize(getActivity(), info.sizeBytes)))
-                    .setPositiveButton(R.string.licence_view, (d, w) -> {
-                        if (getActivity() instanceof IntelligenceSettingsActivity) {
-                            ((IntelligenceSettingsActivity) getActivity())
-                                    .openLicence(info.licenceUrl);
-                        }
-                    })
+                            Formatter.formatShortFileSize(mActivity, info.sizeBytes)))
+                    .setPositiveButton(R.string.licence_view, (d, w) -> openLicence(info.licenceUrl))
                     .setNeutralButton(R.string.licence_accept, (d, w) -> {
                         mModels.setLicenceAccepted(info.id, true);
                         startDownload(info);
@@ -145,19 +135,19 @@ public final class IntelligenceSettingsFragment extends Fragment {
                 mProgress.setMax(100);
                 mProgress.setProgress((int) (100 * soFar / total));
             }
-            mStatus.setText(getString(R.string.status_downloading,
-                    Formatter.formatShortFileSize(getActivity(), soFar),
-                    Formatter.formatShortFileSize(getActivity(), total)));
+            mStatus.setText(mActivity.getString(R.string.status_downloading,
+                    Formatter.formatShortFileSize(mActivity, soFar),
+                    Formatter.formatShortFileSize(mActivity, total)));
         }, this::refresh);
     }
 
     private void onDeleteClicked() {
         mModels.info(info -> {
             long bytes = info == null ? 0 : info.bytesDownloaded;
-            new AlertDialog.Builder(getActivity())
+            new AlertDialog.Builder(mActivity)
                     .setTitle(R.string.delete_title)
-                    .setMessage(getString(R.string.delete_body,
-                            Formatter.formatShortFileSize(getActivity(), bytes)))
+                    .setMessage(mActivity.getString(R.string.delete_body,
+                            Formatter.formatShortFileSize(mActivity, bytes)))
                     .setPositiveButton(R.string.delete_confirm, (d, w) -> {
                         mModels.deleteAll(this::refresh);
                     })
@@ -166,13 +156,20 @@ public final class IntelligenceSettingsFragment extends Fragment {
         });
     }
 
-    private void refresh() {
+    private void openLicence(String url) {
+        if (url == null || url.isEmpty()) {
+            return;
+        }
+        mActivity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+    }
+
+    void refresh() {
         boolean enabled = mConsent.isGloballyEnabled();
         mMasterSwitch.setChecked(enabled);
         mDownloadButton.setEnabled(enabled);
 
         int tier = DeviceTier.TIER_E;
-        mCapability.setText(getString(R.string.capability_summary, DeviceTier.name(tier)));
+        mCapability.setText(mActivity.getString(R.string.capability_summary, DeviceTier.name(tier)));
 
         mModels.info(info -> {
             if (info == null) {
@@ -185,8 +182,8 @@ public final class IntelligenceSettingsFragment extends Fragment {
             mDeleteButton.setEnabled(info.bytesDownloaded > 0);
             switch (info.state) {
                 case ModelInfo.STATE_AVAILABLE:
-                    mStatus.setText(getString(R.string.status_ready, info.displayName,
-                            Formatter.formatShortFileSize(getActivity(), info.bytesDownloaded)));
+                    mStatus.setText(mActivity.getString(R.string.status_ready, info.displayName,
+                            Formatter.formatShortFileSize(mActivity, info.bytesDownloaded)));
                     mDownloadButton.setEnabled(false);
                     mProgress.setVisibility(View.GONE);
                     break;
@@ -194,8 +191,8 @@ public final class IntelligenceSettingsFragment extends Fragment {
                     mProgress.setVisibility(View.VISIBLE);
                     break;
                 default:
-                    mStatus.setText(getString(R.string.status_downloadable, info.displayName,
-                            Formatter.formatShortFileSize(getActivity(), info.sizeBytes)));
+                    mStatus.setText(mActivity.getString(R.string.status_downloadable, info.displayName,
+                            Formatter.formatShortFileSize(mActivity, info.sizeBytes)));
                     mProgress.setVisibility(View.GONE);
                     break;
             }

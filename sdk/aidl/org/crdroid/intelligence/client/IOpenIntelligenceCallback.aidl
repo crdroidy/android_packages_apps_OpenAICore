@@ -16,6 +16,8 @@
 
 package org.crdroid.intelligence.client;
 
+import android.os.Bundle;
+
 oneway interface IOpenIntelligenceCallback {
     void onPartialResult(in Bundle partial);
     void onResult(in Bundle result);
