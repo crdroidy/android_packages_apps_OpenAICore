@@ -1,0 +1,17 @@
+# Service entry points are resolved by name from the manifest and by the platform.
+-keep class org.crdroid.intelligence.broker.IntelligenceBrokerService { *; }
+-keep class org.crdroid.intelligence.inference.InferenceService { *; }
+-keep class org.crdroid.intelligence.probe.BackendProbeService { *; }
+-keep class org.crdroid.intelligence.api.OpenIntelligenceService { *; }
+-keep class org.crdroid.intelligence.models.ModelProviderService { *; }
+
+# Called from JNI: the native bridge looks these up by descriptor.
+-keepclasseswithmembernames class org.crdroid.intelligence.inference.engine.NativeEngine {
+    native <methods>;
+}
+-keepclasseswithmembernames class org.crdroid.intelligence.probe.NativeProbe {
+    native <methods>;
+}
+-keep interface org.crdroid.intelligence.inference.engine.InferenceEngine$TokenSink {
+    boolean onChunk(java.lang.String);
+}

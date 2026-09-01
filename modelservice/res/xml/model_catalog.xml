@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Models OpenAICore knows how to fetch.
+
+  Weights are never bundled in the ROM: gemma-4-E2B is ~2.6 GB, and the base model card governs
+  use under the Gemma Terms of Use rather than an OSI licence. crDroid therefore downloads direct
+  from the upstream host after an explicit terms-acceptance screen and mirrors nothing.
+
+  sha256 must be filled in per revision before a branch ships; an empty digest makes
+  ModelDownloader refuse the download rather than install an unverified file.
+-->
+<models>
+    <model
+        id="gemma-4-e2b-it"
+        version="1"
+        displayName="Gemma 4 E2B (instruction tuned)"
+        url="https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+        sha256=""
+        sizeBytes="2708374016"
+        modalities="text|image|audio"
+        maxTokens="32768"
+        licenceName="Gemma Terms of Use"
+        licenceUrl="https://ai.google.dev/gemma/terms" />
+
+    <model
+        id="gemma-4-e4b-it"
+        version="1"
+        displayName="Gemma 4 E4B (instruction tuned)"
+        url="https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm"
+        sha256=""
+        sizeBytes="4404019200"
+        modalities="text|image|audio"
+        maxTokens="32768"
+        licenceName="Gemma Terms of Use"
+        licenceUrl="https://ai.google.dev/gemma/terms" />
+</models>

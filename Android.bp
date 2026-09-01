@@ -1,0 +1,190 @@
+//
+// Copyright (C) 2026 The crDroid Android Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+package {
+    default_applicable_licenses: ["packages_apps_OpenAICore_license"],
+}
+
+license {
+    name: "packages_apps_OpenAICore_license",
+    visibility: [":__subpackages__"],
+    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
+    license_text: ["NOTICE"],
+}
+
+// -----------------------------------------------------------------------------
+// Shared types and the provider AIDL, used by both APKs.
+// -----------------------------------------------------------------------------
+java_library {
+    name: "openaicore-common",
+    srcs: [
+        "common/src/**/*.java",
+        "common/aidl/**/*.aidl",
+    ],
+    aidl: {
+        local_include_dirs: ["common/aidl"],
+        export_include_dirs: ["common/aidl"],
+    },
+    // system_current, not module_current: android.app.ondeviceintelligence is a @SystemApi
+    // surface. It is not reachable from the public SDK, which is also why the third-party API in
+    // OpenIntelligenceService has to exist at all.
+    sdk_version: "system_current",
+    min_sdk_version: "34",
+}
+
+// -----------------------------------------------------------------------------
+// Layer 4: the client SDK apps link against.
+// -----------------------------------------------------------------------------
+java_library {
+    name: "openaicore-sdk",
+    srcs: [
+        "sdk/src/**/*.java",
+        "sdk/aidl/**/*.aidl",
+    ],
+    aidl: {
+        local_include_dirs: ["sdk/aidl"],
+        export_include_dirs: ["sdk/aidl"],
+    },
+    // The SDK is for ordinary apps, so it must compile against the public API only. If a
+    // @SystemApi symbol ever creeps in here, third-party callers stop being able to build.
+    sdk_version: "current",
+    min_sdk_version: "34",
+    installable: false,
+}
+
+// -----------------------------------------------------------------------------
+// Native: the probe helpers and the JNI bridge to the engine adapter.
+// -----------------------------------------------------------------------------
+cc_library_shared {
+    name: "libopenaicore_jni",
+    srcs: [
+        "native/jni/engine_jni.cc",
+        "native/jni/opencl_probe.cc",
+    ],
+    local_include_dirs: ["native/include"],
+    header_libs: ["jni_headers"],
+    shared_libs: [
+        "libEGL",
+        "libGLESv2",
+        "liblog",
+    ],
+    // Deliberately no dependency on libOpenCL or on the engine adapter: both are dlopened.
+    // Linking either would make this library fail to load on the majority of crDroid's device
+    // matrix, taking the whole inference process with it instead of falling back.
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wno-unused-parameter",
+    ],
+    product_specific: true,
+    compile_multilib: "64",
+}
+
+// -----------------------------------------------------------------------------
+// The engine adapter, built out of tree.
+//
+// LiteRT-LM builds with Bazel and does not integrate with Soong, so it is not built here. See
+// native/litertlm/README.md: build the adapter against a pinned LiteRT-LM tag, drop the result in
+// prebuilts/litertlm/<arch>/, and this module imports it. When the prebuilt is absent the build
+// still works and OpenAICore reports the feature unavailable.
+// -----------------------------------------------------------------------------
+soong_config_module_type {
+    name: "openaicore_engine_prebuilt",
+    module_type: "cc_prebuilt_library_shared",
+    config_namespace: "crdroid",
+    bool_variables: ["openaicore_litertlm_prebuilt"],
+    properties: ["enabled"],
+}
+
+openaicore_engine_prebuilt {
+    name: "libopenaicore_litertlm",
+    enabled: false,
+    soong_config_variables: {
+        openaicore_litertlm_prebuilt: {
+            enabled: true,
+        },
+    },
+    srcs: ["prebuilts/litertlm/arm64/libopenaicore_litertlm.so"],
+    strip: {
+        none: true,
+    },
+    product_specific: true,
+    compile_multilib: "64",
+}
+
+// -----------------------------------------------------------------------------
+// APK 1: broker, inference sandbox, probe, third-party API, settings.
+// No INTERNET permission - see app/AndroidManifest.xml for why that matters.
+// -----------------------------------------------------------------------------
+android_app {
+    name: "OpenAICore",
+    manifest: "app/AndroidManifest.xml",
+    srcs: ["app/src/**/*.java"],
+    resource_dirs: ["app/res"],
+    static_libs: [
+        "openaicore-common",
+        "openaicore-sdk",
+    ],
+    jni_libs: ["libopenaicore_jni"],
+    use_embedded_native_libs: false,
+    // Platform-signed and privileged: USE_ON_DEVICE_INTELLIGENCE is signature|privileged, and
+    // the intelligence roles are systemOnly.
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    platform_apis: true,
+    required: [
+        "privapp-permissions-org.crdroid.intelligence.xml",
+        "org.crdroid.intelligence.xml",
+    ],
+    optimize: {
+        proguard_flags_files: ["proguard.flags"],
+    },
+}
+
+// -----------------------------------------------------------------------------
+// APK 2: the model downloader. The only component with network access.
+// -----------------------------------------------------------------------------
+android_app {
+    name: "OpenAICoreModels",
+    manifest: "modelservice/AndroidManifest.xml",
+    srcs: ["modelservice/src/**/*.java"],
+    resource_dirs: ["modelservice/res"],
+    static_libs: ["openaicore-common"],
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    platform_apis: true,
+    optimize: {
+        proguard_flags_files: ["proguard.flags"],
+    },
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.crdroid.intelligence.xml",
+    src: "etc/privapp-permissions-org.crdroid.intelligence.xml",
+    sub_dir: "permissions",
+    product_specific: true,
+    filename_from_src: true,
+}
+
+prebuilt_etc {
+    name: "org.crdroid.intelligence.xml",
+    src: "etc/org.crdroid.intelligence.xml",
+    sub_dir: "sysconfig",
+    product_specific: true,
+    filename_from_src: true,
+}

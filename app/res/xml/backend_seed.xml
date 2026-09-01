@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Seed and blocklist for the GPU backend probe. This is not a device table: tier is decided by
+  running the probe. Entries here only pre-answer cases where running it is either pointless or
+  known to hang, so the first request does not pay for the discovery.
+
+  backend="cpu" is the blocklist. It means "do not attempt a GPU engine here", not "this device is
+  slow" — the probe is skipped entirely for these.
+
+  match is a case-insensitive substring of Build.SOC_MODEL, falling back to Build.HARDWARE.
+-->
+<backends>
+    <!--
+      ANGLE-CL ships as libOpenCL.so on recent Pixel and Samsung parts. ML Drift's generated
+      kernels are rejected by Clspv over an implicit __global -> __constant address-space
+      conversion and engine construction fails outright rather than degrading, so the runtime
+      check in NativeProbe.isAngleOpenCl is the real gate. Nothing is blocklisted by SoC for it,
+      because whether a given build ships ANGLE-CL varies within the same SoC.
+    -->
+
+    <!-- Known-good OpenCL: Adreno on recent Snapdragon flagships. -->
+    <soc match="SM8750" backend="opencl" />
+    <soc match="SM8650" backend="opencl" />
+    <soc match="SM8550" backend="opencl" />
+
+    <!-- Mali on recent Dimensity: OpenCL present and ML Drift validated. -->
+    <soc match="MT6989" backend="opencl" />
+    <soc match="MT6991" backend="opencl" />
+</backends>

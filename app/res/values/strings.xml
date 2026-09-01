@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">On-device intelligence</string>
+    <string name="settings_title">On-device intelligence</string>
+
+    <string name="permlab_use_intelligence">use on-device AI</string>
+    <string name="permdesc_use_intelligence">Allows this app to send text and images to the
+        on-device AI model for summarising, rewriting and similar tasks. Nothing leaves the
+        device.</string>
+
+    <string name="master_switch_label">Use on-device intelligence</string>
+    <string name="master_switch_summary">Runs a language model locally. Nothing is sent off the
+        device and no usage data is collected.</string>
+
+    <string name="consent_title">Turn on on-device intelligence?</string>
+    <string name="consent_body">A language model runs entirely on this phone. Prompts and results
+        never leave the device, are never written to disk or logs, and no usage data is
+        collected.\n\nThe model is a large download and is not included in the ROM. You will be
+        shown its licence terms before anything is fetched.\n\nRunning it uses noticeable battery
+        and can warm the device. You can turn this off, or remove the model entirely, at any
+        time.</string>
+    <string name="consent_accept">Turn on</string>
+
+    <string name="licence_title">%1$s</string>
+    <string name="licence_body">%1$s is distributed under the %2$s, which is not an open-source
+        licence. crDroid does not host or redistribute the weights: they are downloaded directly
+        from the upstream host.\n\nDownload size: %3$s</string>
+    <string name="licence_view">Read terms</string>
+    <string name="licence_accept">Accept and download</string>
+
+    <string name="status_ready">%1$s installed (%2$s)</string>
+    <string name="status_downloadable">%1$s available to download (%2$s)</string>
+    <string name="status_downloading">Downloading %1$s of %2$s</string>
+    <string name="status_no_provider">Model service unavailable on this build</string>
+    <string name="capability_summary">This device is tier %1$s</string>
+
+    <string name="download_button">Download model</string>
+    <string name="delete_button">Delete model</string>
+    <string name="delete_title">Delete the model?</string>
+    <string name="delete_body">This frees %1$s. Features that need the model stop working until
+        it is downloaded again.</string>
+    <string name="delete_confirm">Delete</string>
+</resources>
